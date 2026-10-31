@@ -1,3 +1,4 @@
+
 import express, { type Express } from "express";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
@@ -10,7 +11,7 @@ let appPromise: Promise<Express> | null = null;
 export async function getApp(): Promise<Express> {
   if (!appPromise) {
     appPromise = (async () => {
-      // Connect to MongoDB before initializing Better Auth
+      // Connect MongoDB first
       await connectDB();
 
       // Initialize Better Auth after database connection
@@ -19,20 +20,26 @@ export async function getApp(): Promise<Express> {
 
       const app = express();
 
-      const allowedOrigins = [
-        "http://localhost:3000",
-        "https://helping-hands-client-five.vercel.app",
-        process.env.CLIENT_URL,
-      ].filter((origin): origin is string => Boolean(origin));
+      const allowedOrigins = new Set(
+        [
+          "http://localhost:3000",
+          "https://helping-hands-client-five.vercel.app",
+          process.env.CLIENT_URL,
+        ].filter((origin): origin is string => Boolean(origin))
+      );
 
+      // CORS configuration
       app.use(
         cors({
           origin: (origin, callback) => {
-            if (!origin || allowedOrigins.includes(origin)) {
-              callback(null, true);
-            } else {
-              callback(new Error("Not allowed by CORS"));
+            // Allow requests without an Origin header
+            if (!origin || allowedOrigins.has(origin)) {
+              return callback(null, true);
             }
+
+            return callback(
+              new Error(`CORS blocked this origin: ${origin}`)
+            );
           },
           credentials: true,
           methods: [
@@ -50,13 +57,13 @@ export async function getApp(): Promise<Express> {
         })
       );
 
-      // Parse JSON request bodies
+      // Parse JSON
       app.use(express.json());
 
-      // Better Auth endpoints
+      // Better Auth routes
       app.all("/api/auth/*any", toNodeHandler(auth));
 
-      // Custom authentication routes
+      // Custom auth routes
       app.use("/api/auth-custom", authRoutes);
 
       // Event routes
