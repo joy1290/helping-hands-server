@@ -1,18 +1,21 @@
-import authRoutes from "./routes/auth.routes.js";
 import express, { type Express } from "express";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
 import { connectDB } from "./config/db.js";
 import eventRoutes from "./routes/event.routes.js";
+import authRoutes from "./routes/auth.routes.js";
 
 let appPromise: Promise<Express> | null = null;
 
 export async function getApp(): Promise<Express> {
   if (!appPromise) {
     appPromise = (async () => {
+      // Connect to MongoDB before initializing Better Auth
       await connectDB();
 
-      const { auth } = await import("./auth/auth.js");
+      // Initialize Better Auth after database connection
+      const { getAuth } = await import("./auth/auth.js");
+      const auth = await getAuth();
 
       const app = express();
 
@@ -32,23 +35,36 @@ export async function getApp(): Promise<Express> {
             }
           },
           credentials: true,
-          methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+          methods: [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS",
+          ],
           allowedHeaders: [
             "Content-Type",
             "Authorization",
-            "Cookie",
           ],
         })
       );
 
+      // Parse JSON request bodies
+      app.use(express.json());
+
+      // Better Auth endpoints
       app.all("/api/auth/*any", toNodeHandler(auth));
 
-      app.use(express.json());
-      app.use("/api/events", eventRoutes);
+      // Custom authentication routes
       app.use("/api/auth-custom", authRoutes);
 
+      // Event routes
+      app.use("/api/events", eventRoutes);
+
+      // Health check
       app.get("/", (_req, res) => {
-        res.json({
+        res.status(200).json({
           success: true,
           message: "HelpingHands API is running!",
         });

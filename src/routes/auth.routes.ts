@@ -1,11 +1,14 @@
 
 import { Router } from "express";
-import { auth } from "../auth/auth.js";
+import { getAuth } from "../auth/auth.js";
 
 const router = Router();
 
 router.post("/set-password", async (req, res) => {
   try {
+    const auth = await getAuth();
+
+    // Verify the user's active session
     const session = await auth.api.getSession({
       headers: req.headers as any,
     });
@@ -17,32 +20,35 @@ router.post("/set-password", async (req, res) => {
       });
     }
 
-    const { newPassword } = req.body;
+    const { newPassword } = req.body ?? {};
 
     if (
       typeof newPassword !== "string" ||
-      newPassword.length < 6 ||
+      newPassword.length < 8 ||
       newPassword.length > 128
     ) {
       return res.status(400).json({
         success: false,
-        message: "Password must be 6-128 characters",
+        message: "Password must be 8-128 characters",
       });
     }
 
+    // Better Auth securely creates the credential account
     await auth.api.setPassword({
-      body: { newPassword },
+      body: {
+        newPassword,
+      },
       headers: req.headers as any,
     });
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       message: "Password set successfully",
     });
   } catch (error) {
     console.error("Set password error:", error);
 
-    return res.status(400).json({
+    return res.status(500).json({
       success: false,
       message: "Could not set password",
     });
