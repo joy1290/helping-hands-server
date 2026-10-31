@@ -10,22 +10,47 @@ import {
 
 const router = Router();
 
-// Event validation schema
 const eventSchema = z.object({
-  title: z.string().min(3, "Title must be at least 3 characters"),
-  description: z.string().min(10, "Description is too short"),
-  location: z.string().min(3, "Location is required"),
+  title: z.string().trim().min(3).max(100),
+  description: z.string().trim().min(10).max(1000),
+  location: z.string().trim().min(3).max(150),
   eventDate: z.string().refine(
-    (date) => !Number.isNaN(Date.parse(date)),
-    "Invalid event date"
+    (date) => {
+      const parsed = new Date(date);
+      return !Number.isNaN(parsed.getTime()) && parsed.getTime() > Date.now();
+    },
+    "Event date must be in the future"
   ),
-  image: z.string().url("Please provide a valid image URL"),
-  category: z.string().min(2, "Category is required"),
+  image: z.string().url(),
+  category: z.string().trim().min(2),
 });
 
-// ========================================
+// GET HOME EVENTS - ONLY 6 UPCOMING EVENTS
+router.get("/home", async (_req, res) => {
+  try {
+    const events = await getDB()
+      .collection("events")
+      .find({
+        eventDate: { $gte: new Date().toISOString() },
+      })
+      .sort({ eventDate: 1 })
+      .limit(6)
+      .toArray();
+
+    res.status(200).json({
+      success: true,
+      events,
+    });
+  } catch (error) {
+    console.error("Home events error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch home events",
+    });
+  }
+});
+
 // GET ALL UPCOMING EVENTS
-// ========================================
 router.get("/", async (_req, res) => {
   try {
     const events = await getDB()
@@ -42,7 +67,6 @@ router.get("/", async (_req, res) => {
     });
   } catch (error) {
     console.error("Get events error:", error);
-
     res.status(500).json({
       success: false,
       message: "Failed to fetch events",
@@ -50,21 +74,16 @@ router.get("/", async (_req, res) => {
   }
 });
 
-// ========================================
 // GET LOGGED-IN USER'S JOINED EVENTS
-// Keep this route before /:id
-// ========================================
 router.get(
   "/joined/me",
   verifyToken,
   async (req: AuthenticatedRequest, res) => {
     try {
-      const userId = req.user!.id;
-
       const events = await getDB()
         .collection("events")
         .find({
-          participants: userId,
+          participants: req.user!.id,
           eventDate: { $gte: new Date().toISOString() },
         })
         .sort({ eventDate: 1 })
@@ -76,7 +95,6 @@ router.get(
       });
     } catch (error) {
       console.error("Joined events error:", error);
-
       res.status(500).json({
         success: false,
         message: "Failed to fetch joined events",
@@ -85,9 +103,7 @@ router.get(
   }
 );
 
-// ========================================
 // GET SINGLE EVENT
-// ========================================
 router.get("/:id", async (req, res) => {
   try {
     const id = req.params.id;
@@ -102,9 +118,7 @@ router.get("/:id", async (req, res) => {
 
     const event = await getDB()
       .collection("events")
-      .findOne({
-        _id: new ObjectId(id),
-      });
+      .findOne({ _id: new ObjectId(id) });
 
     if (!event) {
       res.status(404).json({
@@ -120,7 +134,6 @@ router.get("/:id", async (req, res) => {
     });
   } catch (error) {
     console.error("Get event error:", error);
-
     res.status(500).json({
       success: false,
       message: "Failed to fetch event",
@@ -128,9 +141,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ========================================
-// CREATE EVENT (LOGIN REQUIRED)
-// ========================================
+// CREATE EVENT
 router.post(
   "/",
   verifyToken,
@@ -168,7 +179,6 @@ router.post(
       });
     } catch (error) {
       console.error("Create event error:", error);
-
       res.status(500).json({
         success: false,
         message: "Failed to create event",
@@ -177,9 +187,7 @@ router.post(
   }
 );
 
-// ========================================
-// JOIN EVENT (LOGIN REQUIRED)
-// ========================================
+// JOIN EVENT
 router.post(
   "/:id/join",
   verifyToken,
@@ -232,9 +240,7 @@ router.post(
           participants: { $ne: userId },
         },
         {
-          $addToSet: {
-            participants: userId,
-          },
+          $addToSet: { participants: userId },
         }
       );
 
@@ -252,7 +258,6 @@ router.post(
       });
     } catch (error) {
       console.error("Join event error:", error);
-
       res.status(500).json({
         success: false,
         message: "Failed to join event",
@@ -261,10 +266,7 @@ router.post(
   }
 );
 
-// ========================================
-// UPDATE EVENT (ONLY OWNER CAN UPDATE)
-// ========================================
-
+// UPDATE EVENT - ONLY OWNER
 router.put(
   "/:id",
   verifyToken,
@@ -291,29 +293,7 @@ router.put(
         return;
       }
 
-      const db = getDB();
-
-      const existingEvent = await db.collection("events").findOne({
-        _id: new ObjectId(id),
-      });
-
-      if (!existingEvent) {
-        res.status(404).json({
-          success: false,
-          message: "Event not found",
-        });
-        return;
-      }
-
-      if (existingEvent.createdBy !== req.user!.id) {
-        res.status(403).json({
-          success: false,
-          message: "You are not allowed to update this event",
-        });
-        return;
-      }
-
-      await db.collection("events").updateOne(
+      const result = await getDB().collection("events").updateOne(
         {
           _id: new ObjectId(id),
           createdBy: req.user!.id,
@@ -323,13 +303,26 @@ router.put(
         }
       );
 
+      if (result.matchedCount === 0) {
+        const exists = await getDB().collection("events").findOne({
+          _id: new ObjectId(id),
+        });
+
+        res.status(exists ? 403 : 404).json({
+          success: false,
+          message: exists
+            ? "You are not allowed to update this event"
+            : "Event not found",
+        });
+        return;
+      }
+
       res.status(200).json({
         success: true,
         message: "Event updated successfully",
       });
     } catch (error) {
       console.error("Update event error:", error);
-
       res.status(500).json({
         success: false,
         message: "Failed to update event",
@@ -338,11 +331,7 @@ router.put(
   }
 );
 
-
-// ========================================
-// DELETE EVENT (ONLY OWNER CAN DELETE)
-// ========================================
-
+// DELETE EVENT - ONLY OWNER
 router.delete(
   "/:id",
   verifyToken,
@@ -358,32 +347,24 @@ router.delete(
         return;
       }
 
-      const db = getDB();
-
-      const existingEvent = await db.collection("events").findOne({
-        _id: new ObjectId(id),
-      });
-
-      if (!existingEvent) {
-        res.status(404).json({
-          success: false,
-          message: "Event not found",
-        });
-        return;
-      }
-
-      if (existingEvent.createdBy !== req.user!.id) {
-        res.status(403).json({
-          success: false,
-          message: "You are not allowed to delete this event",
-        });
-        return;
-      }
-
-      await db.collection("events").deleteOne({
+      const result = await getDB().collection("events").deleteOne({
         _id: new ObjectId(id),
         createdBy: req.user!.id,
       });
+
+      if (result.deletedCount === 0) {
+        const exists = await getDB().collection("events").findOne({
+          _id: new ObjectId(id),
+        });
+
+        res.status(exists ? 403 : 404).json({
+          success: false,
+          message: exists
+            ? "You are not allowed to delete this event"
+            : "Event not found",
+        });
+        return;
+      }
 
       res.status(200).json({
         success: true,
@@ -391,7 +372,6 @@ router.delete(
       });
     } catch (error) {
       console.error("Delete event error:", error);
-
       res.status(500).json({
         success: false,
         message: "Failed to delete event",
