@@ -13,6 +13,11 @@ export const auth = betterAuth({
 
   secret: process.env.BETTER_AUTH_SECRET,
 
+  trustedOrigins: [
+    "http://localhost:3000",
+    process.env.CLIENT_URL!,
+  ],
+
   advanced: {
     defaultCookieAttributes: {
       sameSite: "none",
@@ -21,15 +26,17 @@ export const auth = betterAuth({
     },
   },
 
-  trustedOrigins: [
-    "http://localhost:3000",
-    process.env.CLIENT_URL!,
-  ],
-
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 6,
     maxPasswordLength: 128,
+  },
+
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["google"],
+    },
   },
 
   socialProviders: {
