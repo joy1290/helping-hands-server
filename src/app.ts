@@ -12,20 +12,32 @@ export async function getApp(): Promise<Express> {
     appPromise = (async () => {
       await connectDB();
 
-      // Import auth only after MongoDB is connected
       const { auth } = await import("./auth/auth.js");
 
       const app = express();
 
       const allowedOrigins = [
         "http://localhost:3000",
+        "https://helping-hands-client-five.vercel.app",
         process.env.CLIENT_URL,
       ].filter((origin): origin is string => Boolean(origin));
 
       app.use(
         cors({
-          origin: allowedOrigins,
+          origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+              callback(null, true);
+            } else {
+              callback(new Error("Not allowed by CORS"));
+            }
+          },
           credentials: true,
+          methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+          allowedHeaders: [
+            "Content-Type",
+            "Authorization",
+            "Cookie",
+          ],
         })
       );
 
