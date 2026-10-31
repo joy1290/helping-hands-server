@@ -12,16 +12,26 @@ if (!uri) {
 
 const client = new MongoClient(uri);
 
-let database: Db;
+let database: Db | undefined;
+let connectionPromise: Promise<Db> | null = null;
 
 export async function connectDB(): Promise<Db> {
-  await client.connect();
+  if (database) return database;
 
-  database = client.db("helping-hands");
+  if (!connectionPromise) {
+    connectionPromise = client.connect()
+      .then(() => {
+        database = client.db("helping-hands");
+        console.log("MongoDB connected successfully!");
+        return database;
+      })
+      .catch((error) => {
+        connectionPromise = null;
+        throw error;
+      });
+  }
 
-  console.log("MongoDB connected successfully!");
-
-  return database;
+  return connectionPromise;
 }
 
 export function getDB(): Db {
