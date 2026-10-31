@@ -1,4 +1,4 @@
-
+import authRoutes from "./routes/auth.routes.js";
 import express, { type Express } from "express";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
@@ -45,6 +45,7 @@ export async function getApp(): Promise<Express> {
 
       app.use(express.json());
       app.use("/api/events", eventRoutes);
+      app.use("/api/auth-custom", authRoutes);
 
       app.get("/", (_req, res) => {
         res.json({
