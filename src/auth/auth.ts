@@ -5,11 +5,19 @@ import { jwt } from "better-auth/plugins";
 import { getDB } from "../config/db.js";
 
 export const auth = betterAuth({
+    
   database: mongodbAdapter(getDB()),
 
   baseURL: process.env.BETTER_AUTH_URL,
 
   secret: process.env.BETTER_AUTH_SECRET,
+advanced: {
+  defaultCookieAttributes: {
+    sameSite: "none",
+    secure: true,
+    httpOnly: true,
+  },
+},
 
  trustedOrigins: [
   process.env.CLIENT_URL!,
