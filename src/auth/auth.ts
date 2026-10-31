@@ -4,18 +4,23 @@ import { mongodbAdapter } from "@better-auth/mongo-adapter";
 import { jwt } from "better-auth/plugins";
 import { getDB } from "../config/db.js";
 
+const baseURL =
+  process.env.BETTER_AUTH_URL || "http://localhost:5000";
+
+const clientURL =
+  process.env.CLIENT_URL || "http://localhost:3000";
+
 export const auth = betterAuth({
   database: mongodbAdapter(getDB()),
 
-  baseURL:
-    process.env.BETTER_AUTH_URL ||
-    "http://localhost:5000",
+  baseURL,
 
   secret: process.env.BETTER_AUTH_SECRET,
 
   trustedOrigins: [
     "http://localhost:3000",
-    process.env.CLIENT_URL!,
+    "https://helping-hands-client-five.vercel.app",
+    clientURL,
   ],
 
   advanced: {
